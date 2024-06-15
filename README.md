@@ -1,7 +1,7 @@
 # bcode-bridge
 Redirect java code.
 
-Under construction. Nothing works yet.  
+Under construction.  
 
 # What
 
@@ -56,5 +56,11 @@ applications:
       - sourceApplication: "App1"
         sourceMethod: "com.example.App1Main#foo"
         destinationMethod: "com.example.App2Main#fooWithLog"
-
+      - sourceApplication: "App2"
+        sourceMethod: "com.example.App2Main#foobar"
+        destinationMethod: "com.example.App2Main#redirectToItselfFooBar"
 ```
+
+# Issues
+
+Redirected class containing method needs to have a no argument constructor.  
