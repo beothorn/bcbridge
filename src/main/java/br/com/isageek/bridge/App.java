@@ -22,8 +22,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -52,10 +50,10 @@ public class App {
         createClassLoaders(javaAppsConfig);
         LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners = createClassRedefiners(javaAppsConfig);
         redefineClasses(redefiners);
-        runnAllApplications(javaAppsConfig);
+        runAllApplications(javaAppsConfig);
     }
 
-    private static void runnAllApplications(final JavaAppConfig javaAppsConfig) {
+    private static void runAllApplications(final JavaAppConfig javaAppsConfig) {
         for (Application application: javaAppsConfig.getApplications()) {
             URLClassLoader currentAppClassLoader = classloaders.get(application.getName());
             Thread appThread = getAppThread(application, currentAppClassLoader);
