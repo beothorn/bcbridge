@@ -23,31 +23,38 @@ Avoid network calls and use direct call.
 
 # Example 
 
+There is an App1 and an App2. The call on App1 on class com.example.App1Main method foo will be redirected to App2 on 
+class com.example.App2Main method fooWithLog.  
+Console outputs will be redirected to `/path/to/app1/logs/`.  
+System properties property1 and property2 will be overwritten.  
+
+
 ```yaml
 applications:
   - name: "App1"
     jarsPath: "/path/to/app1/jars"
     mainClass: "com.example.App1Main"
+    commandArguments: ["a", "b", "c"]
     systemProperties:
       - name: "property1"
         value: "value1"
       - name: "property2"
         value: "value2"
-    logFilePath: "/path/to/app1/logs/app1.log"
+    stdout: "/path/to/app1/logs/app1.log"
   - name: "App2"
-    dependencies:
-      - name: "App1"
+    dependencies: ["App1"]
     jarsPath: "/path/to/app2/jars"
     mainClass: "com.example.App2Main"
+    commandArguments: ["a", "b", "c"]
     systemProperties:
       - name: "property1"
         value: "value1"
       - name: "property2"
         value: "value2"
-    logFilePath: "/path/to/app2/logs/app2.log"
+    stdout: "/path/to/app2/logs/app2.log"
     redirections:
       - sourceApplication: "App1"
-        sourceMethod: "com.example.App1Main#foo(String, String, int)"
+        sourceMethod: "com.example.App1Main#foo"
         destinationMethod: "com.example.App2Main#fooWithLog"
 
 ```
