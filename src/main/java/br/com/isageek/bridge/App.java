@@ -1,12 +1,13 @@
 package br.com.isageek.bridge;
 
+import br.com.isageek.bridge.advice.MethodInterceptor;
+import br.com.isageek.bridge.advice.PropertyInterceptor;
 import br.com.isageek.bridge.yaml.Application;
 import br.com.isageek.bridge.yaml.JavaAppConfig;
 import br.com.isageek.bridge.yaml.Redirection;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.asm.Advice;
-import net.bytebuddy.asm.Advice.*;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.DynamicType.Unloaded;
 import net.bytebuddy.dynamic.loading.ClassReloadingStrategy;
@@ -23,9 +24,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
 
-import static net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC;
-import static net.bytebuddy.matcher.ElementMatchers.isMethod;
-import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.*;
 
 public class App {
     private static final Map<String, URLClassLoader> classloaders = new LinkedHashMap<>();
@@ -50,6 +49,21 @@ public class App {
         createClassLoaders(javaAppsConfig);
         LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners = createClassRedefiners(javaAppsConfig);
         redefineClasses(redefiners);
+
+
+
+        ClassLoader bcbridgeClassLoader = Thread.currentThread().getContextClassLoader();
+        Class<?> system = System.class;
+        new ByteBuddy().ignore(none()).redefine(system).visit(Advice.to(
+                PropertyInterceptor.class
+        ).on(
+                named("getProperty")
+                        .and(isMethod())
+        )).make().load(bcbridgeClassLoader, ClassReloadingStrategy.fromInstalledAgent());
+
+        PropertyInterceptor.sysProps = new HashMap<>();
+        PropertyInterceptor.sysProps.put(classloaders.get("Client"), Map.of("clientProp", "FAFOFA"));
+
         runAllApplications(javaAppsConfig);
     }
 
@@ -115,7 +129,6 @@ public class App {
                                     }
                                 }
                             }
-                            break;
                         }
                     }
 
@@ -217,31 +230,5 @@ public class App {
         }
     }
 
-    static class MethodInterceptor {
-        @OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
-        public static Object enter(
-            @Origin Method method,
-            @AllArguments Object[] allArguments
-        ) {
-            System.out.println("[bcbridge] Entered method " + method.getName());
-            try {
-                Object dispatch = App.dispatch(method, allArguments);
-                return Objects.requireNonNullElse(dispatch, Void.TYPE);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
 
-        @OnMethodExit
-        public static void exit(
-            @Return(readOnly = false, typing = DYNAMIC) Object returned,
-            @Enter Object enter
-        ) {
-            if(Void.TYPE.equals(enter)) {
-                returned = null;
-                return;
-            }
-            returned = enter;
-        }
-    }
 }
