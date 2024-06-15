@@ -21,10 +21,9 @@ import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -100,17 +99,34 @@ public class App {
                     Class<?> dstClass = dstClassLoader.loadClass(dstClassName);
                     Method[] dstClassMethods = dstClass.getDeclaredMethods();
 
+                    boolean foundSrc = false;
+                    boolean foundDst = false;
                     for (final Method srcClassMethod : srcClassMethods) {
                         if (srcClassMethod.getName().equals(sourceFullMethod)) {
+                            foundSrc = true;
                             for (final Method dstClassMethod : dstClassMethods) {
                                 if (dstClassMethod.getName().equals(dstFullMethod)) {
-                                    System.out.println("[bcbridge] Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
-                                    redirectionMethods.put(srcClassMethod, dstClassMethod);
-                                    break;
+                                    // I need to get the names as they are from different classloaders, so classes don't match
+                                    List<String> srcParams = Arrays.stream(srcClassMethod.getParameterTypes()).map(Class::getName).toList();
+                                    List<String> dstParams = Arrays.stream(dstClassMethod.getParameterTypes()).map(Class::getName).toList();
+                                    if (srcParams.equals(dstParams)){
+                                        System.out.println("[bcbridge] Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
+                                        redirectionMethods.put(srcClassMethod, dstClassMethod);
+                                        foundDst = true;
+                                        break;
+                                    }
                                 }
                             }
                             break;
                         }
+                    }
+
+                    if (!foundSrc) {
+                        System.out.println("[bcbridge] Warning! Missing method '"+sourceFullMethod+"' for app '"+srcApp+"'");
+                    }
+
+                    if (!foundDst) {
+                        System.out.println("[bcbridge] Warning! Missing method with same signature as source for '"+dstFullMethod+"' for app '"+dstApp+"'");
                     }
 
                     LinkedHashMap<String, DynamicType.Builder> appRedefiners = redefiners.getOrDefault(srcApp, new LinkedHashMap<>());
