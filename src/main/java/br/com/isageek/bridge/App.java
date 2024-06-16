@@ -2,20 +2,26 @@ package br.com.isageek.bridge;
 
 import br.com.isageek.bridge.advice.MethodInterceptor;
 import br.com.isageek.bridge.advice.PropertyInterceptor;
+import br.com.isageek.bridge.baseloaderinjections.SysProps;
 import br.com.isageek.bridge.yaml.Application;
 import br.com.isageek.bridge.yaml.JavaAppConfig;
 import br.com.isageek.bridge.yaml.Redirection;
+import br.com.isageek.bridge.yaml.SystemProperty;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.DynamicType.Unloaded;
+import net.bytebuddy.dynamic.loading.ClassInjector;
 import net.bytebuddy.dynamic.loading.ClassReloadingStrategy;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 
 import java.io.*;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -24,6 +30,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
 
+import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 public class App {
@@ -41,30 +48,42 @@ public class App {
 
         try {
             ByteBuddyAgent.install();
+
         } catch (IllegalStateException e) {
             System.err.println("[bcbridge] ByteBuddy agent installation failed: " + e.getMessage());
             return;
         }
 
+        // Injects PropertyInterceptor on boot loader so  sysProps map is visible to System
+        // otherwise, when trying to check if prop should be overriden we would get a PropertyInterceptor classDefNotFound
+        Class<SysProps> sysPropsClass = SysProps.class;
+        ClassInjector.UsingUnsafe.ofBootLoader().inject(singletonMap(
+            new TypeDescription.ForLoadedType(sysPropsClass),
+            ClassFileLocator.ForClassLoader.read(sysPropsClass)
+        ));
+
+
         createClassLoaders(javaAppsConfig);
         LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners = createClassRedefiners(javaAppsConfig);
         redefineClasses(redefiners);
+        loadSystemPropertiesFromConfig(javaAppsConfig);
 
-
-
-        ClassLoader bcbridgeClassLoader = Thread.currentThread().getContextClassLoader();
         Class<?> system = System.class;
-        new ByteBuddy().ignore(none()).redefine(system).visit(Advice.to(
-                PropertyInterceptor.class
-        ).on(
-                named("getProperty")
-                        .and(isMethod())
-        )).make().load(bcbridgeClassLoader, ClassReloadingStrategy.fromInstalledAgent());
-
-        PropertyInterceptor.sysProps = new HashMap<>();
-        PropertyInterceptor.sysProps.put(classloaders.get("Client"), Map.of("clientProp", "FAFOFA"));
+        new ByteBuddy().ignore(none()).redefine(system).visit(Advice.to(PropertyInterceptor.class).on(
+            named("getProperty").and(isMethod())
+        )).make().load(ClassLoader.getSystemClassLoader(), ClassReloadingStrategy.fromInstalledAgent());
 
         runAllApplications(javaAppsConfig);
+    }
+
+    private static void loadSystemPropertiesFromConfig(final JavaAppConfig javaAppsConfig) {
+        for (final Application application : javaAppsConfig.getApplications()) {
+            if (application.getSystemProperties() == null) continue;
+            URLClassLoader appClassLoader = classloaders.get(application.getName());
+            for (final SystemProperty systemProperty : application.getSystemProperties()) {
+                SysProps.props.put(appClassLoader, Map.of(systemProperty.getName(), systemProperty.getValue()));
+            }
+        }
     }
 
     private static void runAllApplications(final JavaAppConfig javaAppsConfig) {

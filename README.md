@@ -16,6 +16,8 @@ Interactive console with meta information.
 
 # Why
 
+Override system properties and environment variables.  
+Different system properties or environment variables for each app on same process.  
 Debug calls.  
 Observable run.  
 Have a single process instead of many process.  
