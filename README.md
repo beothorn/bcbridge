@@ -66,3 +66,4 @@ applications:
 # Issues
 
 Redirected class containing method needs to have a no argument constructor.  
+Only methods with standard type parameters.
