@@ -28,19 +28,16 @@ public class EnvironmentVariableInterceptor {
             throw new RuntimeException(e);
         }
 
-        System.out.println("[bcbridge] Requested Environment Variable " + method.getName()+" args "+ Arrays.toString(allArguments));
         if(allArguments.length != 1) {
             return null;
         }
         try {
             Map<String, String> envVars = props.get(Thread.currentThread().getContextClassLoader());
             if (envVars == null) {
-                System.out.println("[bcbridge] envVars is null");
                 return null;
             }
             String varKey = (String) allArguments[0];
             String maybeEnvVar = envVars.get(varKey);
-            System.out.println("[bcbridge] envVars override for'"+varKey+"' '"+maybeEnvVar+"'");
             return maybeEnvVar;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -52,8 +49,6 @@ public class EnvironmentVariableInterceptor {
             @Return(readOnly = false, typing = DYNAMIC) Object returned,
             @Enter String enter
     ) {
-        System.out.println("[bcbridge] enter envvar " + enter);
-        System.out.println("[bcbridge] returned envvar " + returned);
         if (enter != null) {
             returned = enter;
         }

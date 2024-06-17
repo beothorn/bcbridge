@@ -16,7 +16,6 @@ public class MethodInterceptor {
         @Origin Method method,
         @AllArguments Object[] allArguments
     ) {
-        System.out.println("[bcbridge] Entered method " + method.getName());
         try {
             Object dispatch = App.dispatch(method, allArguments);
             return Objects.requireNonNullElse(dispatch, Void.TYPE);

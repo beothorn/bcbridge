@@ -5,5 +5,5 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class EnvVars {
-    public static Map<URLClassLoader, Map<String, String>> vars = new HashMap<>();
+    public static Map<ClassLoader, Map<String, String>> vars = new HashMap<>();
 }

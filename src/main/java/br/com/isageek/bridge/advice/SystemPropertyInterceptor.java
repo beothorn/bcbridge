@@ -27,19 +27,16 @@ public class SystemPropertyInterceptor {
             throw new RuntimeException(e);
         }
 
-        System.out.println("[bcbridge] Requested property " + method.getName()+" args "+ Arrays.toString(allArguments));
         if(allArguments.length != 1) {
             return null;
         }
         try {
             Map<String, String> sysProps = props.get(Thread.currentThread().getContextClassLoader());
             if (sysProps == null) {
-                System.out.println("[bcbridge] sysProps is null");
                 return null;
             }
             String propKey = (String) allArguments[0];
             String maybeSysProp = sysProps.get(propKey);
-            System.out.println("[bcbridge] sysProps override for'"+propKey+"' '"+maybeSysProp+"'");
             return maybeSysProp;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -51,8 +48,6 @@ public class SystemPropertyInterceptor {
             @Return(readOnly = false, typing = DYNAMIC) Object returned,
             @Enter String enter
     ) {
-        System.out.println("[bcbridge] enter " + enter);
-        System.out.println("[bcbridge] returned " + returned);
         if (enter != null) {
             returned = enter;
         }

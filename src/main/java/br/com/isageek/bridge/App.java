@@ -5,6 +5,7 @@ import br.com.isageek.bridge.advice.MethodInterceptor;
 import br.com.isageek.bridge.advice.SystemPropertyInterceptor;
 import br.com.isageek.bridge.baseloaderinjections.EnvVars;
 import br.com.isageek.bridge.baseloaderinjections.SysProps;
+import br.com.isageek.bridge.common.ClassLoaderDependentPrintStream;
 import br.com.isageek.bridge.yaml.*;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.ByteBuddyAgent;
@@ -28,14 +29,15 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
 
-import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 public class App {
-    private static final Map<String, URLClassLoader> classloaders = new LinkedHashMap<>();
+    private static final Map<String, ClassLoader> classloaders = new LinkedHashMap<>();
     private static final Map<Method, Method> redirectionMethods = new LinkedHashMap<>();
+    private static PrintStream bcbridgeOut;
 
     public static void main( String[] args ) throws IOException, ClassNotFoundException {
+        bcbridgeOut = System.out;
 
         if (args.length != 1) {
             System.err.println("Argument should be an yaml file.");
@@ -67,6 +69,7 @@ public class App {
         redefineClasses(redefiners);
         loadSystemPropertiesFromConfig(javaAppsConfig);
         loadEnvironmentVariablesFromConfig(javaAppsConfig);
+        createOutputsFromConfig(javaAppsConfig);
 
         Class<?> system = System.class;
         new ByteBuddy().ignore(none()).redefine(system)
@@ -77,10 +80,24 @@ public class App {
         runAllApplications(javaAppsConfig);
     }
 
+    private static void createOutputsFromConfig(final JavaAppConfig javaAppsConfig) throws FileNotFoundException {
+
+        Map<ClassLoader, PrintStream> outs = new HashMap<>();
+
+        for (final Application application : javaAppsConfig.getApplications()) {
+            if (application.getStdout() == null) continue;
+            File out = new File(application.getStdout());
+            ClassLoader appClassLoader = classloaders.get(application.getName());
+            outs.put(appClassLoader, new PrintStream(out));
+        }
+
+        System.setOut(new ClassLoaderDependentPrintStream(outs));
+    }
+
     private static void loadSystemPropertiesFromConfig(final JavaAppConfig javaAppsConfig) {
         for (final Application application : javaAppsConfig.getApplications()) {
             if (application.getSystemProperties() == null) continue;
-            URLClassLoader appClassLoader = classloaders.get(application.getName());
+            ClassLoader appClassLoader = classloaders.get(application.getName());
             for (final SystemProperty systemProperty : application.getSystemProperties()) {
                 SysProps.props.put(appClassLoader, Map.of(systemProperty.getName(), systemProperty.getValue()));
             }
@@ -90,7 +107,7 @@ public class App {
     private static void loadEnvironmentVariablesFromConfig(final JavaAppConfig javaAppsConfig) {
         for (final Application application : javaAppsConfig.getApplications()) {
             if (application.getSystemProperties() == null) continue;
-            URLClassLoader appClassLoader = classloaders.get(application.getName());
+            ClassLoader appClassLoader = classloaders.get(application.getName());
             for (final EnvironmentVariable environmentVariable : application.getEnvironmentVariables()) {
                 EnvVars.vars.put(appClassLoader, Map.of(environmentVariable.getName(), environmentVariable.getValue()));
             }
@@ -99,7 +116,7 @@ public class App {
 
     private static void runAllApplications(final JavaAppConfig javaAppsConfig) {
         for (Application application: javaAppsConfig.getApplications()) {
-            URLClassLoader currentAppClassLoader = classloaders.get(application.getName());
+            ClassLoader currentAppClassLoader = classloaders.get(application.getName());
             List<String> commandArgumentsOrNull = application.getCommandArguments();
             final String[] args = (commandArgumentsOrNull == null) ? new String[]{} : commandArgumentsOrNull.toArray(new String[]{});
             Thread appThread = getAppThread(
@@ -107,6 +124,7 @@ public class App {
                 args,
                 currentAppClassLoader
             );
+            System.out.println("[bcbridge] Will start " + application.getName());
             appThread.start();
         }
     }
@@ -134,7 +152,7 @@ public class App {
                     String sourceFullMethod = splitSource[1];
 
                     String srcApp = redirection.getSourceApplication();
-                    URLClassLoader srcClassLoader = classloaders.get(srcApp);
+                    ClassLoader srcClassLoader = classloaders.get(srcApp);
                     Class<?> srcClass = srcClassLoader.loadClass(sourceClassName);
                     Method[] srcClassMethods = srcClass.getDeclaredMethods();
 
@@ -143,7 +161,7 @@ public class App {
                     String dstFullMethod = splitDst[1];
 
                     String dstApp = application.getName();
-                    URLClassLoader dstClassLoader = classloaders.get(dstApp);
+                    ClassLoader dstClassLoader = classloaders.get(dstApp);
                     Class<?> dstClass = dstClassLoader.loadClass(dstClassName);
                     Method[] dstClassMethods = dstClass.getDeclaredMethods();
 
@@ -223,17 +241,17 @@ public class App {
     private static Thread getAppThread(
         final Application application,
         final String[] args,
-        final URLClassLoader currentAppClassLoader
+        final ClassLoader currentAppClassLoader
     ) {
         Thread appThread = new Thread(application.getName()) {
             @Override
             public void run() {
                 super.run();
-                System.out.println("[bcbridge] Will start " + application.getName());
                 try {
                     Class<?> mainClass = currentAppClassLoader.loadClass(application.getMainClass());
                     Method mainMethod1 = mainClass.getMethod("main", String[].class);
-                    mainMethod1.invoke(null, (Object) args);
+                    Object result = mainMethod1.invoke(null, (Object) args);
+                    bcbridgeOut.println(application.getName() + " exited with result " + result);
                 } catch (IllegalAccessException | InvocationTargetException | ClassNotFoundException |
                          NoSuchMethodException e) {
                     throw new RuntimeException(e);
@@ -248,15 +266,12 @@ public class App {
         final Method srcMethod,
         final Object[] allArguments
     ) {
-        System.out.println("[bcbridge] Redirect from " + srcMethod.getName() + "(" + Arrays.toString(allArguments) + ")");
         try {
             Method methodRedirection = redirectionMethods.get(srcMethod);
-            System.out.println("[bcbridge] Redirect to " + methodRedirection.getName() + "(" + Arrays.toString(allArguments) + ")");
             methodRedirection.setAccessible(true);
             boolean isStatic = Modifier.isStatic(methodRedirection.getModifiers());
             if (isStatic) {
                 Object result = methodRedirection.invoke(null, allArguments);
-                System.out.println("[bcbridge] RESULT: "+result);
                 return result;
             }
 
