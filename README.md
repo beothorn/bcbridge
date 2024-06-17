@@ -1,7 +1,10 @@
 # bcbridge
 With bcbridge you can redirect java code. This means if a function calls goes to a() and you need it to go to b(), 
 all you need is a simple YAML configuration.  
-Also configure what system properties, environment variables and command line arguments the application will get.    
+You can load two different java apps and redirect calls between them.  
+So for example, if you have two java apps that uses the network to communicate, but you are on a special environment 
+where you want them to run as a single application and call each other directly, you can just load both on bcbridge.  
+You can configure what system properties, environment variables and command line arguments each application will get.     
 
 # What
 
@@ -24,13 +27,17 @@ Observable run.
 Have a single process instead of many process.  
 Avoid network calls and use direct call.  
 
+# How
+
+Run bcbridge passing the configuration YAML as parameter.  
+`java -jar bcbridge.jar myConfig.yaml`
+
 # Example 
 
 There is an App1 and an App2. The call on App1 on class com.example.App1Main method foo will be redirected to App2 on 
 class com.example.App2Main method fooWithLog.  
 Console outputs will be redirected to `/path/to/app1/logs/`.  
-System properties property1 and property2 will be overwritten.  
-
+System properties property1 and property2 will be overwritten.
 
 ```yaml
 applications:
