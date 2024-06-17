@@ -6,6 +6,8 @@ So for example, if you have two java apps that uses the network to communicate, 
 where you want them to run as a single application and call each other directly, you can just load both on bcbridge.  
 You can configure what system properties, environment variables and command line arguments each application will get.     
 
+Try it yourself, [download bcbridge version 1.0-SNAPSHOT](https://github.com/beothorn/bcbridge/releases/download/1.0-SNAPSHOT/bcode-bridge-1.0-SNAPSHOT-jar-with-dependencies.jar)
+
 # What
 
 Load different jars into separate class loaders.  
