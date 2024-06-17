@@ -89,7 +89,13 @@ public class App {
     private static void runAllApplications(final JavaAppConfig javaAppsConfig) {
         for (Application application: javaAppsConfig.getApplications()) {
             URLClassLoader currentAppClassLoader = classloaders.get(application.getName());
-            Thread appThread = getAppThread(application, currentAppClassLoader);
+            List<String> commandArgumentsOrNull = application.getCommandArguments();
+            final String[] args = (commandArgumentsOrNull == null) ? new String[]{} : commandArgumentsOrNull.toArray(new String[]{});
+            Thread appThread = getAppThread(
+                application,
+                args,
+                currentAppClassLoader
+            );
             appThread.start();
         }
     }
@@ -205,6 +211,7 @@ public class App {
 
     private static Thread getAppThread(
         final Application application,
+        final String[] args,
         final URLClassLoader currentAppClassLoader
     ) {
         Thread appThread = new Thread(application.getName()) {
@@ -215,7 +222,7 @@ public class App {
                 try {
                     Class<?> mainClass = currentAppClassLoader.loadClass(application.getMainClass());
                     Method mainMethod1 = mainClass.getMethod("main", String[].class);
-                    mainMethod1.invoke(null, (Object) new String[]{});
+                    mainMethod1.invoke(null, (Object) args);
                 } catch (IllegalAccessException | InvocationTargetException | ClassNotFoundException |
                          NoSuchMethodException e) {
                     throw new RuntimeException(e);

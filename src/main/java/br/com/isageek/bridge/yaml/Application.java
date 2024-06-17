@@ -9,6 +9,8 @@ public class Application {
     private String mainClass;
     private List<SystemProperty> systemProperties;
     private List<String> dependencies;
+
+    private List<String> commandArguments;
     private String stdout;
     private List<Redirection> redirections;
 
@@ -66,5 +68,13 @@ public class Application {
 
     public void setDependencies(final List<String> dependencies) {
         this.dependencies = dependencies;
+    }
+
+    public List<String> getCommandArguments() {
+        return commandArguments;
+    }
+
+    public void setCommandArguments(final List<String> commandArguments) {
+        this.commandArguments = commandArguments;
     }
 }
