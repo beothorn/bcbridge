@@ -1,7 +1,7 @@
-# bcode-bridge
-Redirect java code.
-
-Under construction.  
+# bcbridge
+With bcbridge you can redirect java code. This means if a function calls goes to a() and you need it to go to b(), 
+all you need is a simple YAML configuration.  
+Also configure what system properties, environment variables and command line arguments the application will get.    
 
 # What
 
@@ -17,6 +17,7 @@ Interactive console with meta information.
 # Why
 
 Override system properties and environment variables.  
+Use different environment variables for apps running on the same environment.  
 Different system properties or environment variables for each app on same process.  
 Debug calls.  
 Observable run.  
@@ -42,17 +43,23 @@ applications:
         value: "value1"
       - name: "property2"
         value: "value2"
+    environmentVariables:
+      - name: "property1"
+        value: "value1"
     stdout: "/path/to/app1/logs/app1.log"
   - name: "App2"
     dependencies: ["App1"]
     jarsPath: "/path/to/app2/jars"
     mainClass: "com.example.App2Main"
-    commandArguments: ["a", "b", "c"]
+    commandArguments: ["d", "e", "f"]
     systemProperties:
       - name: "property1"
-        value: "value1"
+        value: "anotherValue1"
       - name: "property2"
-        value: "value2"
+        value: "anotherValue2"
+    environmentVariables:
+      - name: "property1"
+        value: "anotherValue1"
     stdout: "/path/to/app2/logs/app2.log"
     redirections:
       - sourceApplication: "App1"

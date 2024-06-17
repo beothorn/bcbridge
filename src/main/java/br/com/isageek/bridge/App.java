@@ -1,12 +1,11 @@
 package br.com.isageek.bridge;
 
+import br.com.isageek.bridge.advice.EnvironmentVariableInterceptor;
 import br.com.isageek.bridge.advice.MethodInterceptor;
-import br.com.isageek.bridge.advice.PropertyInterceptor;
+import br.com.isageek.bridge.advice.SystemPropertyInterceptor;
+import br.com.isageek.bridge.baseloaderinjections.EnvVars;
 import br.com.isageek.bridge.baseloaderinjections.SysProps;
-import br.com.isageek.bridge.yaml.Application;
-import br.com.isageek.bridge.yaml.JavaAppConfig;
-import br.com.isageek.bridge.yaml.Redirection;
-import br.com.isageek.bridge.yaml.SystemProperty;
+import br.com.isageek.bridge.yaml.*;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.asm.Advice;
@@ -21,7 +20,6 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 
 import java.io.*;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -57,9 +55,10 @@ public class App {
         // Injects PropertyInterceptor on boot loader so  sysProps map is visible to System
         // otherwise, when trying to check if prop should be overriden we would get a PropertyInterceptor classDefNotFound
         Class<SysProps> sysPropsClass = SysProps.class;
-        ClassInjector.UsingUnsafe.ofBootLoader().inject(singletonMap(
-            new TypeDescription.ForLoadedType(sysPropsClass),
-            ClassFileLocator.ForClassLoader.read(sysPropsClass)
+        Class<EnvVars> envVarsClass = EnvVars.class;
+        ClassInjector.UsingUnsafe.ofBootLoader().inject(Map.of(
+            new TypeDescription.ForLoadedType(sysPropsClass), ClassFileLocator.ForClassLoader.read(sysPropsClass),
+            new TypeDescription.ForLoadedType(envVarsClass), ClassFileLocator.ForClassLoader.read(envVarsClass)
         ));
 
 
@@ -67,11 +66,13 @@ public class App {
         LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners = createClassRedefiners(javaAppsConfig);
         redefineClasses(redefiners);
         loadSystemPropertiesFromConfig(javaAppsConfig);
+        loadEnvironmentVariablesFromConfig(javaAppsConfig);
 
         Class<?> system = System.class;
-        new ByteBuddy().ignore(none()).redefine(system).visit(Advice.to(PropertyInterceptor.class).on(
-            named("getProperty").and(isMethod())
-        )).make().load(ClassLoader.getSystemClassLoader(), ClassReloadingStrategy.fromInstalledAgent());
+        new ByteBuddy().ignore(none()).redefine(system)
+                .visit(Advice.to(SystemPropertyInterceptor.class).on(named("getProperty").and(isMethod())))
+                .visit(Advice.to(EnvironmentVariableInterceptor.class).on(named("getenv").and(isMethod())))
+                .make().load(ClassLoader.getSystemClassLoader(), ClassReloadingStrategy.fromInstalledAgent());
 
         runAllApplications(javaAppsConfig);
     }
@@ -82,6 +83,16 @@ public class App {
             URLClassLoader appClassLoader = classloaders.get(application.getName());
             for (final SystemProperty systemProperty : application.getSystemProperties()) {
                 SysProps.props.put(appClassLoader, Map.of(systemProperty.getName(), systemProperty.getValue()));
+            }
+        }
+    }
+
+    private static void loadEnvironmentVariablesFromConfig(final JavaAppConfig javaAppsConfig) {
+        for (final Application application : javaAppsConfig.getApplications()) {
+            if (application.getSystemProperties() == null) continue;
+            URLClassLoader appClassLoader = classloaders.get(application.getName());
+            for (final EnvironmentVariable environmentVariable : application.getEnvironmentVariables()) {
+                EnvVars.vars.put(appClassLoader, Map.of(environmentVariable.getName(), environmentVariable.getValue()));
             }
         }
     }
@@ -255,6 +266,4 @@ public class App {
             throw new RuntimeException(e);
         }
     }
-
-
 }

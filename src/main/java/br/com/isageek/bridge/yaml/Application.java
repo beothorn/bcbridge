@@ -8,8 +8,8 @@ public class Application {
     private String jarsPath;
     private String mainClass;
     private List<SystemProperty> systemProperties;
+    private List<EnvironmentVariable> environmentVariables;
     private List<String> dependencies;
-
     private List<String> commandArguments;
     private String stdout;
     private List<Redirection> redirections;
@@ -76,5 +76,13 @@ public class Application {
 
     public void setCommandArguments(final List<String> commandArguments) {
         this.commandArguments = commandArguments;
+    }
+
+    public List<EnvironmentVariable> getEnvironmentVariables() {
+        return environmentVariables;
+    }
+
+    public void setEnvironmentVariables(final List<EnvironmentVariable> environmentVariables) {
+        this.environmentVariables = environmentVariables;
     }
 }

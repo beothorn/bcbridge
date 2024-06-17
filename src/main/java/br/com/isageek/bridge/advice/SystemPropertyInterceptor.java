@@ -8,12 +8,10 @@ import java.lang.reflect.Method;
 import java.net.URLClassLoader;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 
 import static net.bytebuddy.implementation.bytecode.assign.Assigner.Typing.DYNAMIC;
 
-public class PropertyInterceptor {
-
+public class SystemPropertyInterceptor {
 
     @OnMethodEnter
     public static String enter(
