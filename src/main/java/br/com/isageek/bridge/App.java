@@ -40,7 +40,7 @@ public class App {
         bcbridgeOut = System.out;
 
         if (args.length != 1) {
-            System.err.println("Argument should be an yaml file.");
+            Logger.error("Argument should be an yaml file.");
             System.exit(2);
         }
 
@@ -48,14 +48,13 @@ public class App {
 
         try {
             ByteBuddyAgent.install();
-
         } catch (IllegalStateException e) {
-            System.err.println("[bcbridge] ByteBuddy agent installation failed: " + e.getMessage());
+            Logger.error("ByteBuddy agent installation failed: " + e.getMessage());
             return;
         }
 
-        // Injects PropertyInterceptor on boot loader so  sysProps map is visible to System
-        // otherwise, when trying to check if prop should be overriden we would get a PropertyInterceptor classDefNotFound
+        // Injects PropertyInterceptor on bootloader so  sysProps map is visible to System
+        // otherwise, when trying to check if prop should be overridden we would get a PropertyInterceptor classDefNotFound
         Class<SysProps> sysPropsClass = SysProps.class;
         Class<EnvVars> envVarsClass = EnvVars.class;
         ClassInjector.UsingUnsafe.ofBootLoader().inject(Map.of(
@@ -97,19 +96,27 @@ public class App {
     private static void loadSystemPropertiesFromConfig(final JavaAppConfig javaAppsConfig) {
         for (final Application application : javaAppsConfig.getApplications()) {
             if (application.getSystemProperties() == null) continue;
-            ClassLoader appClassLoader = classloaders.get(application.getName());
+            String name = application.getName();
+            ClassLoader appClassLoader = classloaders.get(name);
             for (final SystemProperty systemProperty : application.getSystemProperties()) {
-                SysProps.props.put(appClassLoader, Map.of(systemProperty.getName(), systemProperty.getValue()));
+                String sysPropName = systemProperty.getName();
+                String sysPropValue = systemProperty.getValue();
+                Logger.info("Adding sys prop on '"+name+"': '"+ sysPropName +"' -> '"+ sysPropValue +"'");
+                SysProps.props.put(appClassLoader, Map.of(sysPropName, sysPropValue));
             }
         }
     }
 
     private static void loadEnvironmentVariablesFromConfig(final JavaAppConfig javaAppsConfig) {
         for (final Application application : javaAppsConfig.getApplications()) {
-            if (application.getSystemProperties() == null) continue;
-            ClassLoader appClassLoader = classloaders.get(application.getName());
+            if (application.getEnvironmentVariables() == null) continue;
+            String name = application.getName();
+            ClassLoader appClassLoader = classloaders.get(name);
             for (final EnvironmentVariable environmentVariable : application.getEnvironmentVariables()) {
-                EnvVars.vars.put(appClassLoader, Map.of(environmentVariable.getName(), environmentVariable.getValue()));
+                String envVarName = environmentVariable.getName();
+                String envVarValue = environmentVariable.getValue();
+                Logger.info("Adding env var on '"+name+"': '"+ envVarName +"' -> '"+ envVarValue +"'");
+                EnvVars.vars.put(appClassLoader, Map.of(envVarName, envVarValue));
             }
         }
     }
@@ -124,16 +131,16 @@ public class App {
                 args,
                 currentAppClassLoader
             );
-            System.out.println("[bcbridge] Will start " + application.getName());
+            Logger.info("Will start " + application.getName());
             appThread.start();
         }
     }
 
     private static void redefineClasses(final LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners) {
         redefiners.forEach((app, classesRedefiners) -> {
-            System.out.println("[bcvridge] Will redefine app '"+app+"'");
+            Logger.info("Will redefine app '"+app+"'");
             classesRedefiners.forEach((className, classRedefiner) -> {
-                System.out.println("[bcvridge] Will redefine class '"+className+"' for app '"+app+"'");
+                Logger.info("Will redefine class '"+className+"' for app '"+app+"'");
                 try(Unloaded make = classRedefiner.make()) {
                     make.load(classloaders.get(app), ClassReloadingStrategy.fromInstalledAgent());
                 }
@@ -176,7 +183,7 @@ public class App {
                                     List<String> srcParams = Arrays.stream(srcClassMethod.getParameterTypes()).map(Class::getName).toList();
                                     List<String> dstParams = Arrays.stream(dstClassMethod.getParameterTypes()).map(Class::getName).toList();
                                     if (srcParams.equals(dstParams)){
-                                        System.out.println("[bcbridge] Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
+                                        Logger.info("Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
                                         redirectionMethods.put(srcClassMethod, dstClassMethod);
                                         foundDst = true;
                                         break;
@@ -187,11 +194,11 @@ public class App {
                     }
 
                     if (!foundSrc) {
-                        System.out.println("[bcbridge] Warning! Missing method '"+sourceFullMethod+"' for app '"+srcApp+"'");
+                        Logger.info("Warning! Missing method '"+sourceFullMethod+"' for app '"+srcApp+"'");
                     }
 
                     if (!foundDst) {
-                        System.out.println("[bcbridge] Warning! Missing method with same signature as source for '"+dstFullMethod+"' for app '"+dstApp+"'");
+                        Logger.info("Warning! Missing method with same signature as source for '"+dstFullMethod+"' for app '"+dstApp+"'");
                     }
 
                     LinkedHashMap<String, DynamicType.Builder> appRedefiners = redefiners.getOrDefault(srcApp, new LinkedHashMap<>());
@@ -226,7 +233,7 @@ public class App {
                     jarUrls[i] = jarFiles[i].toURI().toURL();
                 }
             } else {
-                throw new RuntimeException("[bcbridge] No JAR files found in the directory '" + appClasspathDir.getAbsolutePath() +"'");
+                throw new RuntimeException("No JAR files found in the directory '" + appClasspathDir.getAbsolutePath() +"'");
             }
             classloaders.put(application.getName(), new URLClassLoader(jarUrls));
         }
