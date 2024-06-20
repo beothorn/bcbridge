@@ -107,12 +107,14 @@ public class App {
             if (application.getSystemProperties() == null) continue;
             String name = application.getName();
             ClassLoader appClassLoader = classloaders.get(name);
+            Map<String, String> sysProps = new HashMap<>();
             for (final SystemProperty systemProperty : application.getSystemProperties()) {
                 String sysPropName = systemProperty.getName();
                 String sysPropValue = systemProperty.getValue();
                 Logger.info(() -> "Adding sys prop on '"+name+"': '"+ sysPropName +"' -> '"+ sysPropValue +"'");
-                SysProps.props.put(appClassLoader, Map.of(sysPropName, sysPropValue));
+                sysProps.put(sysPropName, sysPropValue);
             }
+            SysProps.props.put(appClassLoader, sysProps);
         }
     }
 
@@ -121,12 +123,14 @@ public class App {
             if (application.getEnvironmentVariables() == null) continue;
             String name = application.getName();
             ClassLoader appClassLoader = classloaders.get(name);
+            Map<String, String> envVars = new HashMap<>();
             for (final EnvironmentVariable environmentVariable : application.getEnvironmentVariables()) {
                 String envVarName = environmentVariable.getName();
                 String envVarValue = environmentVariable.getValue();
                 Logger.info(() -> "Adding env var on '"+name+"': '"+ envVarName +"' -> '"+ envVarValue +"'");
-                EnvVars.vars.put(appClassLoader, Map.of(envVarName, envVarValue));
+                envVars.put(envVarName, envVarValue);
             }
+            EnvVars.vars.put(appClassLoader, envVars);
         }
     }
 

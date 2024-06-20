@@ -16,29 +16,24 @@ public class EnvironmentVariableInterceptor {
 
     @OnMethodEnter
     public static String enter(
-            @Origin Method method,
-            @AllArguments Object[] allArguments
+        @AllArguments Object[] allArguments
     ) {
-        Map<URLClassLoader, Map<String, String>> props;
+        Map<URLClassLoader, Map<String, String>> vars;
         try {
             Class<?> envVarsClass =  ClassLoader.getSystemClassLoader().loadClass(EnvVars.class.getCanonicalName());
             Field envVarsMapField = envVarsClass.getDeclaredField("vars");
-            props = (Map<URLClassLoader, Map<String, String>>) envVarsMapField.get(null);
+            vars = (Map<URLClassLoader, Map<String, String>>) envVarsMapField.get(null);
         } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
             throw new RuntimeException(e);
         }
 
-        if(allArguments.length != 1) {
-            return null;
-        }
         try {
-            Map<String, String> envVars = props.get(Thread.currentThread().getContextClassLoader());
+            Map<String, String> envVars = vars.get(Thread.currentThread().getContextClassLoader());
             if (envVars == null) {
                 return null;
             }
             String varKey = (String) allArguments[0];
-            String maybeEnvVar = envVars.get(varKey);
-            return maybeEnvVar;
+            return envVars.get(varKey);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

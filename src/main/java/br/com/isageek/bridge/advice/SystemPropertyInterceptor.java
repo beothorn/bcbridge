@@ -15,8 +15,7 @@ public class SystemPropertyInterceptor {
 
     @OnMethodEnter
     public static String enter(
-            @Origin Method method,
-            @AllArguments Object[] allArguments
+        @AllArguments Object[] allArguments
     ) {
         Map<URLClassLoader, Map<String, String>> props;
         try {
@@ -27,17 +26,13 @@ public class SystemPropertyInterceptor {
             throw new RuntimeException(e);
         }
 
-        if(allArguments.length != 1) {
-            return null;
-        }
         try {
             Map<String, String> sysProps = props.get(Thread.currentThread().getContextClassLoader());
             if (sysProps == null) {
                 return null;
             }
             String propKey = (String) allArguments[0];
-            String maybeSysProp = sysProps.get(propKey);
-            return maybeSysProp;
+            return sysProps.get(propKey);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
