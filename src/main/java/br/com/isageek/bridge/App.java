@@ -40,7 +40,7 @@ public class App {
         bcbridgeOut = System.out;
 
         if (args.length != 1) {
-            Logger.error("Argument should be an yaml file.");
+            Logger.error(() -> "Argument should be an yaml file.");
             System.exit(2);
         }
 
@@ -49,7 +49,7 @@ public class App {
         try {
             ByteBuddyAgent.install();
         } catch (IllegalStateException e) {
-            Logger.error("ByteBuddy agent installation failed: " + e.getMessage());
+            Logger.error(() -> "ByteBuddy agent installation failed: " + e.getMessage());
             return;
         }
 
@@ -101,7 +101,7 @@ public class App {
             for (final SystemProperty systemProperty : application.getSystemProperties()) {
                 String sysPropName = systemProperty.getName();
                 String sysPropValue = systemProperty.getValue();
-                Logger.info("Adding sys prop on '"+name+"': '"+ sysPropName +"' -> '"+ sysPropValue +"'");
+                Logger.info(() -> "Adding sys prop on '"+name+"': '"+ sysPropName +"' -> '"+ sysPropValue +"'");
                 SysProps.props.put(appClassLoader, Map.of(sysPropName, sysPropValue));
             }
         }
@@ -115,7 +115,7 @@ public class App {
             for (final EnvironmentVariable environmentVariable : application.getEnvironmentVariables()) {
                 String envVarName = environmentVariable.getName();
                 String envVarValue = environmentVariable.getValue();
-                Logger.info("Adding env var on '"+name+"': '"+ envVarName +"' -> '"+ envVarValue +"'");
+                Logger.info(() -> "Adding env var on '"+name+"': '"+ envVarName +"' -> '"+ envVarValue +"'");
                 EnvVars.vars.put(appClassLoader, Map.of(envVarName, envVarValue));
             }
         }
@@ -131,16 +131,16 @@ public class App {
                 args,
                 currentAppClassLoader
             );
-            Logger.info("Will start " + application.getName());
+            Logger.info(() -> "Will start " + application.getName());
             appThread.start();
         }
     }
 
     private static void redefineClasses(final LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners) {
         redefiners.forEach((app, classesRedefiners) -> {
-            Logger.info("Will redefine app '"+app+"'");
+            Logger.info(() -> "Will redefine app '"+app+"'");
             classesRedefiners.forEach((className, classRedefiner) -> {
-                Logger.info("Will redefine class '"+className+"' for app '"+app+"'");
+                Logger.info(() -> "Will redefine class '"+className+"' for app '"+app+"'");
                 try(Unloaded make = classRedefiner.make()) {
                     make.load(classloaders.get(app), ClassReloadingStrategy.fromInstalledAgent());
                 }
@@ -183,7 +183,7 @@ public class App {
                                     List<String> srcParams = Arrays.stream(srcClassMethod.getParameterTypes()).map(Class::getName).toList();
                                     List<String> dstParams = Arrays.stream(dstClassMethod.getParameterTypes()).map(Class::getName).toList();
                                     if (srcParams.equals(dstParams)){
-                                        Logger.info("Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
+                                        Logger.info(() -> "Redirect " + srcApp + ":"+srcClassMethod + "-> "+dstApp+":" + dstClassMethod);
                                         redirectionMethods.put(srcClassMethod, dstClassMethod);
                                         foundDst = true;
                                         break;
@@ -194,11 +194,11 @@ public class App {
                     }
 
                     if (!foundSrc) {
-                        Logger.info("Warning! Missing method '"+sourceFullMethod+"' for app '"+srcApp+"'");
+                        Logger.info(() -> "Warning! Missing method '"+sourceFullMethod+"' for app '"+srcApp+"'");
                     }
 
                     if (!foundDst) {
-                        Logger.info("Warning! Missing method with same signature as source for '"+dstFullMethod+"' for app '"+dstApp+"'");
+                        Logger.info(() -> "Warning! Missing method with same signature as source for '"+dstFullMethod+"' for app '"+dstApp+"'");
                     }
 
                     LinkedHashMap<String, DynamicType.Builder> appRedefiners = redefiners.getOrDefault(srcApp, new LinkedHashMap<>());
@@ -278,11 +278,14 @@ public class App {
             methodRedirection.setAccessible(true);
             boolean isStatic = Modifier.isStatic(methodRedirection.getModifiers());
             if (isStatic) {
-                Object result = methodRedirection.invoke(null, allArguments);
-                return result;
+                Logger.trace(() -> "Redirecting static '" + srcMethod.getName()
+                        + "' to '"+methodRedirection.getName()+"' with arguments '"+Arrays.toString(allArguments)+"'");
+                return methodRedirection.invoke(null, allArguments);
             }
 
             Object self = methodRedirection.getDeclaringClass().getDeclaredConstructor().newInstance();
+            Logger.trace(() -> "Redirecting method '" + srcMethod.getName()
+                    + "' to '"+methodRedirection.getName()+"' with arguments '"+Arrays.toString(allArguments)+"'");
             return methodRedirection.invoke(self, allArguments);
         } catch (Exception e) {
             throw new RuntimeException(e);
