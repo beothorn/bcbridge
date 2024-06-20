@@ -39,6 +39,15 @@ public class App {
     public static void main( String[] args ) throws IOException, ClassNotFoundException {
         bcbridgeOut = System.out;
 
+        if (args.length == 1 && (Objects.equals(args[0], "help")
+                || Objects.equals(args[0], "version")
+                || Objects.equals(args[0], "-help")
+                || Objects.equals(args[0], "-version"))) {
+            Logger.info(() -> "Version 1.0-SNAPSHOT");
+            Logger.info(() -> "Usage: bcbridge config.yaml");
+            System.exit(0);
+        }
+
         if (args.length != 1) {
             Logger.error(() -> "Argument should be an yaml file.");
             System.exit(2);

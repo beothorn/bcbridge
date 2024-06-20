@@ -17,13 +17,13 @@ public class Logger {
 
     public static void error(Supplier<String> error) {
         if (errorEnabled) {
-            System.out.println("[bcbridge] [ERROR] "+error);
+            System.out.println("[bcbridge] [ERROR] "+error.get());
         }
     }
 
     public static void trace(Supplier<String> trace) {
         if (traceEnabled) {
-            System.out.println("[bcbridge] [TRACE]"+trace);
+            System.out.println("[bcbridge] [TRACE]"+trace.get());
         }
     }
 
