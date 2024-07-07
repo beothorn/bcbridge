@@ -294,30 +294,60 @@ public class App {
 
     public static Object dispatch(
         final Method srcMethod,
-        final Object[] allArguments
+        final Object[] srcArguments
     ) {
         try {
-            Method methodRedirection = redirectionMethods.get(srcMethod);
-            methodRedirection.setAccessible(true);
-            boolean isStatic = Modifier.isStatic(methodRedirection.getModifiers());
+            Method dstMethod = redirectionMethods.get(srcMethod);
+            dstMethod.setAccessible(true);
+            boolean isStatic = Modifier.isStatic(dstMethod.getModifiers());
             if (isStatic) {
                 Logger.trace(() -> "Redirecting static '" + srcMethod.getName()
-                        + "' to '" + methodRedirection.getName() + "' with arguments '" + Arrays.toString(allArguments) + "'");
-                return methodRedirection.invoke(null, allArguments);
+                        + "' to '" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
+                return dstMethod.invoke(null, srcArguments);
             }
 
-            Object self = methodRedirection.getDeclaringClass().getDeclaredConstructor().newInstance();
+            Object self = dstMethod.getDeclaringClass().getDeclaredConstructor().newInstance();
             Logger.trace(() -> "Redirecting method '" + srcMethod.getName()
-                    + "' to '" + methodRedirection.getName() + "' with arguments '" + Arrays.toString(allArguments) + "'");
+                    + "' to '" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
             try {
-                return methodRedirection.invoke(self, allArguments);
+                return dstMethod.invoke(self, srcArguments);
             } catch (IllegalArgumentException e) {
-                System.out.println(Arrays.toString(allArguments));
-                System.out.println(Arrays.toString(methodRedirection.getParameterTypes()));
-                throw new RuntimeException("Arguments are not the same", e);
+                Class<?>[] parameterTypes = dstMethod.getParameterTypes();
+                ClassLoader dstClassLoader = dstMethod.getDeclaringClass().getClassLoader();
+                Object[] dstArguments = new Object[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    Object srcObj = srcArguments[i];
+                    Object dstObj = reSerializeObjectOnClassLoader(srcObj, dstClassLoader);
+                    dstArguments[i] = dstObj;
+                }
+
+                Class<?> returnType = dstMethod.getReturnType();
+                Object dstReturn = dstMethod.invoke(self, dstArguments);
+                if (returnType.equals(Void.TYPE)) {
+                    return dstReturn;
+                } else {
+                    return reSerializeObjectOnClassLoader(dstReturn, srcMethod.getDeclaringClass().getClassLoader());
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static Object reSerializeObjectOnClassLoader(final Object srcObj, final ClassLoader dstClassLoader) throws IOException, ClassNotFoundException {
+        ByteArrayOutputStream byteOutStream = new ByteArrayOutputStream();
+        ObjectOutputStream objectOutStream = new ObjectOutputStream(byteOutStream);
+        objectOutStream.writeObject(srcObj);
+        byte[] objectBytes = byteOutStream.toByteArray();
+
+        ByteArrayInputStream byteInStream = new ByteArrayInputStream(objectBytes);
+        ObjectInputStream objectInStream = new ObjectInputStream(byteInStream) {
+            @Override
+            protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
+                return Class.forName(desc.getName(), false, dstClassLoader);
+            }
+        };
+        Object dstObj = objectInStream.readObject();
+        return dstObj;
     }
 }
