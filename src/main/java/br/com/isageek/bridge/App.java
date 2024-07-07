@@ -5,6 +5,7 @@ import br.com.isageek.bridge.advice.MethodInterceptor;
 import br.com.isageek.bridge.advice.SystemPropertyInterceptor;
 import br.com.isageek.bridge.baseloaderinjections.EnvVars;
 import br.com.isageek.bridge.baseloaderinjections.SysProps;
+import br.com.isageek.bridge.classloader.ExtendableClassLoader;
 import br.com.isageek.bridge.common.ClassLoaderDependentPrintStream;
 import br.com.isageek.bridge.yaml.*;
 import net.bytebuddy.ByteBuddy;
@@ -26,7 +27,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.*;
 
 import static net.bytebuddy.matcher.ElementMatchers.*;
@@ -43,7 +43,7 @@ public class App {
                 || Objects.equals(args[0], "version")
                 || Objects.equals(args[0], "-help")
                 || Objects.equals(args[0], "-version"))) {
-            Logger.info(() -> "Version 1.0-SNAPSHOT");
+            Logger.info(() -> "Version 1.0");
             Logger.info(() -> "Usage: bcbridge config.yaml");
             System.exit(0);
         }
@@ -70,7 +70,6 @@ public class App {
             new TypeDescription.ForLoadedType(sysPropsClass), ClassFileLocator.ForClassLoader.read(sysPropsClass),
             new TypeDescription.ForLoadedType(envVarsClass), ClassFileLocator.ForClassLoader.read(envVarsClass)
         ));
-
 
         createClassLoaders(javaAppsConfig);
         LinkedHashMap<String, LinkedHashMap<String, DynamicType.Builder>> redefiners = createClassRedefiners(javaAppsConfig);
@@ -258,7 +257,7 @@ public class App {
             } else {
                 throw new RuntimeException("No JAR files found in the directory '" + appClasspathDir.getAbsolutePath() +"'");
             }
-            classloaders.put(application.getName(), new URLClassLoader(jarUrls));
+            classloaders.put(application.getName(), new ExtendableClassLoader(jarUrls));
         }
     }
 
@@ -296,19 +295,19 @@ public class App {
         final Method srcMethod,
         final Object[] srcArguments
     ) {
+        Method dstMethod = redirectionMethods.get(srcMethod);
         try {
-            Method dstMethod = redirectionMethods.get(srcMethod);
             dstMethod.setAccessible(true);
             boolean isStatic = Modifier.isStatic(dstMethod.getModifiers());
             if (isStatic) {
-                Logger.trace(() -> "Redirecting static '" + srcMethod.getName()
-                        + "' to '" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
+                Logger.trace(() -> "Redirecting static '" + srcMethod.getDeclaringClass().getName() + "#" + srcMethod.getName()
+                        + "' to '" + dstMethod.getDeclaringClass().getName() + "#" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
                 return dstMethod.invoke(null, srcArguments);
             }
 
             Object self = dstMethod.getDeclaringClass().getDeclaredConstructor().newInstance();
-            Logger.trace(() -> "Redirecting method '" + srcMethod.getName()
-                    + "' to '" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
+            Logger.trace(() -> "Redirecting method '" + srcMethod.getDeclaringClass().getName() + "#" + srcMethod.getName()
+                    + "' to '" + dstMethod.getDeclaringClass().getName() + "#" + dstMethod.getName() + "' with arguments '" + Arrays.toString(srcArguments) + "'");
             try {
                 return dstMethod.invoke(self, srcArguments);
             } catch (IllegalArgumentException e) {
@@ -330,24 +329,57 @@ public class App {
                 }
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            Logger.error(() -> {
+                if (e.getCause() != null) {
+                    return "Could not dispatch "+ srcMethod.getName()
+                            + "' to '" + dstMethod.getDeclaringClass().getName() + "#" + dstMethod.getName() + "' with arguments '" +
+                            Arrays.toString(srcArguments) + "'. " +
+                            "Reason: " + e.getCause().getClass().getName() + " -> " + e.getCause().getMessage();
+                }
+
+                return "Could not dispatch "+ srcMethod.getName()
+                        + "' to '" + dstMethod.getDeclaringClass().getName() + "#" + dstMethod.getName() + "' with arguments '" +
+                        Arrays.toString(srcArguments) + "'. " +
+                        "Reason: " + e.getClass().getName() + " -> " + e.getMessage();
+            });
+            return null;
         }
     }
 
-    private static Object reSerializeObjectOnClassLoader(final Object srcObj, final ClassLoader dstClassLoader) throws IOException, ClassNotFoundException {
-        ByteArrayOutputStream byteOutStream = new ByteArrayOutputStream();
-        ObjectOutputStream objectOutStream = new ObjectOutputStream(byteOutStream);
-        objectOutStream.writeObject(srcObj);
-        byte[] objectBytes = byteOutStream.toByteArray();
+    private static Object reSerializeObjectOnClassLoader(final Object srcObj, final ClassLoader dstClassLoader) {
+        String srcClass = srcObj.getClass().getCanonicalName();
+        try {
+            dstClassLoader.loadClass(srcClass);
+        } catch (ClassNotFoundException e) {
+            ExtendableClassLoader dstClassLoaderWithDelegations = (ExtendableClassLoader) dstClassLoader;
+            ClassLoader srcClassLoader = srcObj.getClass().getClassLoader();
+            dstClassLoaderWithDelegations.add(srcClass, srcClassLoader);
+        }
 
-        ByteArrayInputStream byteInStream = new ByteArrayInputStream(objectBytes);
-        ObjectInputStream objectInStream = new ObjectInputStream(byteInStream) {
-            @Override
-            protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
-                return Class.forName(desc.getName(), false, dstClassLoader);
-            }
-        };
-        Object dstObj = objectInStream.readObject();
-        return dstObj;
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ObjectOutputStream objectOutStream = new ObjectOutputStream(out);
+            objectOutStream.writeObject(srcObj);
+            objectOutStream.flush();  // Ensure all data is written to the byte array
+            objectOutStream.close();  // Close the stream to release resources
+            ByteArrayInputStream byteInStream = new ByteArrayInputStream(out.toByteArray());
+            ObjectInputStream objectInputStream = new ObjectInputStream(byteInStream) {
+                @Override
+                protected Class<?> resolveClass(ObjectStreamClass desc) throws ClassNotFoundException {
+                    return Class.forName(desc.getName(), false, dstClassLoader);
+                }
+            };
+            return objectInputStream.readObject();
+        } catch (Exception e) {
+            Logger.error(() -> {
+                if (e.getCause() != null) {
+                    return "Exception re-serializing '" + srcObj.getClass().getName() + "': '"
+                            + e.getCause().getClass().getName() +" -> "
+                            + e.getCause().getMessage() + "'";
+                }
+                return "Exception re-serializing '" + srcObj.getClass().getName() + "': '"+ e.getClass().getName() +" -> " + e.getMessage() + "'";
+            });
+            return null;
+        }
     }
 }

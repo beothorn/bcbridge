@@ -6,7 +6,7 @@ So for example, if you have two java apps that uses the network to communicate, 
 where you want them to run as a single application and call each other directly, you can just load both on bcbridge.  
 You can configure what system properties, environment variables and command line arguments each application will get.     
 
-Try it yourself, [download bcbridge version 1.0-SNAPSHOT](https://github.com/beothorn/bcbridge/releases/download/1.0-SNAPSHOT/bcode-bridge-1.0-SNAPSHOT-jar-with-dependencies.jar)
+Try it yourself, [download bcbridge version 1.0](https://github.com/beothorn/bcbridge/releases/download/1.0-SNAPSHOT/bcode-bridge-1.0.jar)
 
 # What
 
@@ -32,7 +32,8 @@ Avoid network calls and use direct call.
 # How
 
 Run bcbridge passing the configuration YAML as parameter.  
-`java -jar bcbridge.jar myConfig.yaml`
+`java -jar bcbridge.jar myConfig.yaml`  
+See more examples at [bcbridge-examples](https://github.com/beothorn/bcbridge-examples)
 
 # Example 
 
@@ -81,5 +82,8 @@ applications:
 
 # Issues
 
-Redirected class containing method needs to have a no argument constructor.  
-Only methods with standard type parameters.
+Redirected class containing method needs to have a no argument constructor. 
+Arguments work if:  
+- They are types from the standard library.  
+- They are serializable.  
+- They either exists on both apps or implement an interface present on both apps.   
