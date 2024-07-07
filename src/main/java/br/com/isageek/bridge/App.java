@@ -173,7 +173,12 @@ public class App {
 
                     String srcApp = redirection.getSourceApplication();
                     ClassLoader srcClassLoader = classloaders.get(srcApp);
-                    Class<?> srcClass = srcClassLoader.loadClass(sourceClassName);
+                    Class<?> srcClass;
+                    try {
+                        srcClass = srcClassLoader.loadClass(sourceClassName);
+                    } catch (ClassNotFoundException e) {
+                        throw new RuntimeException("Looked for '"+sourceClassName+"' and found nothing on '"+srcApp+"'", e);
+                    }
                     Method[] srcClassMethods = srcClass.getDeclaredMethods();
 
                     String[] splitDst = redirection.getDestinationMethod().split("#");
@@ -182,7 +187,12 @@ public class App {
 
                     String dstApp = application.getName();
                     ClassLoader dstClassLoader = classloaders.get(dstApp);
-                    Class<?> dstClass = dstClassLoader.loadClass(dstClassName);
+                    Class<?> dstClass;
+                    try {
+                        dstClass = dstClassLoader.loadClass(dstClassName);
+                    } catch (ClassNotFoundException e) {
+                        throw new RuntimeException("Looked for '"+dstClassName+"' and found nothing on '"+dstApp+"'", e);
+                    }
                     Method[] dstClassMethods = dstClass.getDeclaredMethods();
 
                     boolean foundSrc = false;
@@ -292,14 +302,20 @@ public class App {
             boolean isStatic = Modifier.isStatic(methodRedirection.getModifiers());
             if (isStatic) {
                 Logger.trace(() -> "Redirecting static '" + srcMethod.getName()
-                        + "' to '"+methodRedirection.getName()+"' with arguments '"+Arrays.toString(allArguments)+"'");
+                        + "' to '" + methodRedirection.getName() + "' with arguments '" + Arrays.toString(allArguments) + "'");
                 return methodRedirection.invoke(null, allArguments);
             }
 
             Object self = methodRedirection.getDeclaringClass().getDeclaredConstructor().newInstance();
             Logger.trace(() -> "Redirecting method '" + srcMethod.getName()
-                    + "' to '"+methodRedirection.getName()+"' with arguments '"+Arrays.toString(allArguments)+"'");
-            return methodRedirection.invoke(self, allArguments);
+                    + "' to '" + methodRedirection.getName() + "' with arguments '" + Arrays.toString(allArguments) + "'");
+            try {
+                return methodRedirection.invoke(self, allArguments);
+            } catch (IllegalArgumentException e) {
+                System.out.println(Arrays.toString(allArguments));
+                System.out.println(Arrays.toString(methodRedirection.getParameterTypes()));
+                throw new RuntimeException("Arguments are not the same", e);
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
